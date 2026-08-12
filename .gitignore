@@ -23,6 +23,7 @@
 # misc
 .DS_Store
 *.pem
+PROGRESS.md
 
 # debug
 npm-debug.log*
@@ -35,6 +36,10 @@ yarn-error.log*
 
 # vercel
 .vercel
+
+# local tooling config, not part of the app
+.claude/
+CLAUDE.md
 
 # typescript
 *.tsbuildinfo

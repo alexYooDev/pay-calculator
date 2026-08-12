@@ -1,26 +1,96 @@
 @import "tailwindcss";
 
+/*
+  "Payroll Ledger" — drawn from the subject itself: timesheets, payslips, punch cards.
+  Paper + ink instead of a SaaS light/dark theme; a blue-black stamp accent for actions
+  (classic ledger ink), and deep red/green "ink" for deductions vs. take-home, the way a
+  ledger book marks debits and credits.
+*/
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --paper: #e4e7e9;
+  --paper-raised: #eff2f3;
+  --ink: #1b2226;
+  --ink-soft: #5c6b73;
+  --rule: #b9c4c9;
+  --stamp: #2a5c8a;
+  --stamp-ink: #eff2f3;
+  --deduction: #a13333;
+  --net: #1f6e4a;
 }
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+:root[data-theme="dark"] {
+  --paper: #14181a;
+  --paper-raised: #1c2226;
+  --ink: #dce3e6;
+  --ink-soft: #8b99a0;
+  --rule: #333d42;
+  --stamp: #5b9bd5;
+  --stamp-ink: #14181a;
+  --deduction: #e08585;
+  --net: #6fbf9a;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  :root:not([data-theme="light"]) {
+    --paper: #14181a;
+    --paper-raised: #1c2226;
+    --ink: #dce3e6;
+    --ink-soft: #8b99a0;
+    --rule: #333d42;
+    --stamp: #5b9bd5;
+    --stamp-ink: #14181a;
+    --deduction: #e08585;
+    --net: #6fbf9a;
   }
 }
 
+@theme inline {
+  --color-paper: var(--paper);
+  --color-paper-raised: var(--paper-raised);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-rule: var(--rule);
+  --color-stamp: var(--stamp);
+  --color-stamp-ink: var(--stamp-ink);
+  --color-deduction: var(--deduction);
+  --color-net: var(--net);
+  --font-display: var(--font-display);
+  --font-body: var(--font-body);
+  --font-mono: var(--font-mono);
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-body), system-ui, sans-serif;
+}
+
+@layer components {
+  /* Fill-in-the-blank paper form field, not a boxed SaaS input. Fixed height (rather than
+     padding alone) so text inputs, selects, and datetime pickers underline at the same
+     baseline when sitting side by side — their native vertical rhythm differs by element type. */
+  .input {
+    @apply w-full h-9 bg-transparent border-0 border-b-2 border-rule text-ink px-0.5 text-sm font-mono;
+    @apply focus:outline-none focus:border-stamp transition-colors;
+  }
+  select.input {
+    @apply font-body;
+  }
+
+  .btn-stamp {
+    @apply bg-stamp text-stamp-ink font-display uppercase tracking-wide text-sm px-4 py-2 rounded-sm;
+    @apply hover:brightness-110 active:brightness-95 transition disabled:opacity-35 disabled:hover:brightness-100 disabled:cursor-not-allowed;
+  }
+
+  .btn-ghost {
+    @apply font-display uppercase tracking-wide text-sm text-ink-soft hover:text-ink transition disabled:opacity-35 disabled:hover:text-ink-soft disabled:cursor-not-allowed;
+  }
+
+  .ledger-panel {
+    @apply border border-rule bg-paper-raised rounded-sm;
+  }
+
+  .eyebrow {
+    @apply font-display uppercase tracking-widest text-xs text-ink-soft;
+  }
 }

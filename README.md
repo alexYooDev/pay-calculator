@@ -1,36 +1,69 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Pay Calculator
 
-## Getting Started
+A pay calculator for shift workers. Set up a rate template for each job, log your shifts
+against it, and get gross pay (with day-of-week and public-holiday loadings) and PAYG tax
+withholding — before-tax and after-tax, per weekly pay period.
 
-First, run the development server:
+Live: https://paycalculator-omega.vercel.app
+
+## How it works
+
+1. **Rate templates** — one per job/pay rate: employer, base hourly rate, region, casual vs.
+   permanent, and a loading row for each pay category that applies (casual, Saturday, Sunday,
+   public holiday).
+2. **Shifts** — log start/end times against a rate template.
+3. **Calculate** — for each shift, the calculator works out which loadings apply based on the
+   shift's actual date (day of week, and whether it's a public holiday in that region), sums
+   gross pay, groups shifts into weekly pay periods per employer, and applies PAYG withholding
+   to each period's total.
+
+Public holidays are looked up live via the free [Nager.Date](https://date.nager.at) API and
+cached per country/year. Tax withholding follows the ATO's own published formulas (Schedule 1,
+NAT 1004, Scale 2 — Australian resident, tax-free threshold claimed, no HELP/STSL debt).
+
+Data is stored in the browser's `localStorage` — nothing is sent to a server except the pay
+calculation itself (rate templates and shifts, sent to `/api/calculate` and back).
+
+## Getting started
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Testing
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+```bash
+npm test          # run once
+npm run test:watch
+```
 
-## Learn More
+Vitest, covering `lib/*.ts` — the calculation engine, tax withholding, date handling, and
+public holiday lookup.
 
-To learn more about Next.js, take a look at the following resources:
+## Project structure
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+```
+lib/
+  types.ts           RateTemplate / ShiftEntry schema
+  calculate-pay.ts    pay + weekly PAYG withholding calculation
+  tax.ts              ATO Schedule 1 Scale 2 withholding formula
+  holidays.ts          Nager.Date public holiday lookup + cache
+  date-utils.ts        timezone-safe date helpers
+  storage.ts            localStorage persistence
+app/
+  page.tsx              UI
+  api/calculate/route.ts  calculation API route
+```
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+See `PROGRESS.md` for a running log of what's built, what's deliberately deferred, and the
+assumptions baked into the current implementation.
 
-## Deploy on Vercel
+## Deploying
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```bash
+vercel          # preview
+vercel --prod   # production
+```
