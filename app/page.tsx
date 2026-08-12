@@ -204,6 +204,16 @@ export default function Home() {
           </p>
         </div>
 
+        <div className="border-l-2 border-deduction pl-4 py-1 flex flex-col gap-1">
+          <p className="font-display uppercase tracking-wide text-xs text-deduction">Before you rely on this</p>
+          <p className="text-sm text-ink-soft">
+            This is an independent, unofficial tool — not affiliated with your employer, Fair Work, or the
+            ATO. Public holidays are only checked for the region you select, and tax withholding always
+            assumes an Australian resident claiming the tax-free threshold with no HELP/STSL debt. Treat
+            results as an estimate and check them against your actual payslip.
+          </p>
+        </div>
+
         {/* Rate Templates */}
         <section className="flex flex-col gap-4">
           <StepHeading
