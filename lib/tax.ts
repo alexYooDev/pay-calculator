@@ -45,3 +45,13 @@ export function weeklyPaygWithholding(grossWeekly: number): number {
 
   return roundHalfUp(bracket.a! * x - bracket.b!);
 }
+
+/**
+ * PAYG withholding for one fortnight's gross earnings. The ATO doesn't publish separate
+ * fortnightly bracket coefficients — per Schedule 1, fortnightly withholding is worked out by
+ * converting to a weekly-equivalent amount (divide by 2), applying the weekly formula, then
+ * doubling the result.
+ */
+export function fortnightlyPaygWithholding(grossFortnightly: number): number {
+  return weeklyPaygWithholding(grossFortnightly / 2) * 2;
+}

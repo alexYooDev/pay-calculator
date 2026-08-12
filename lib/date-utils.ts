@@ -28,3 +28,27 @@ export function isoWeekStart(dateStr: string): string {
   const offsetToMonday = dow === 0 ? -6 : 1 - dow;
   return addDays(dateStr, offsetToMonday);
 }
+
+/** Whole days between two "YYYY-MM-DD" dates (b minus a). */
+function daysBetween(a: string, b: string): number {
+  const [ay, am, ad] = parseDateParts(a);
+  const [by, bm, bd] = parseDateParts(b);
+  const msA = Date.UTC(ay, am - 1, ad);
+  const msB = Date.UTC(by, bm - 1, bd);
+  return (msB - msA) / (24 * 60 * 60 * 1000);
+}
+
+/**
+ * Monday of the fortnight (14-day pay cycle) containing this "YYYY-MM-DD" date, relative to
+ * `anchor` — the start of some known fortnight in the cycle (e.g. a RateTemplate's
+ * payCycleAnchor). Unlike ISO weeks, fortnight boundaries aren't universal: two employers can
+ * run fortnightly pay cycles offset by one week from each other, so an anchor is required.
+ */
+export function isoFortnightStart(dateStr: string, anchor: string): string {
+  const anchorMonday = isoWeekStart(anchor);
+  const dateMonday = isoWeekStart(dateStr);
+  const weeksSinceAnchor = daysBetween(anchorMonday, dateMonday) / 7;
+
+  const isSecondWeekOfFortnight = weeksSinceAnchor % 2 !== 0;
+  return isSecondWeekOfFortnight ? addDays(dateMonday, -7) : dateMonday;
+}

@@ -23,6 +23,8 @@ function rate(overrides: Partial<RateTemplate> = {}): RateTemplate {
       { type: "sunday", percentage: 50 },
       { type: "public_holiday", percentage: 150 },
     ],
+    payFrequency: "fortnightly",
+    payCycleAnchor: "2026-08-12",
     ...overrides,
   };
 }
@@ -89,25 +91,26 @@ describe("calculatePay", () => {
     );
   });
 
-  it("groups same-week, same-employer shifts into a single pay period and taxes the combined gross once", async () => {
-    // Three weekday shifts in the same ISO week (Mon 10 Aug - Sun 16 Aug), same employer.
-    const shifts = ["10", "11", "13"].map((day) =>
+  it("groups same-fortnight, same-employer shifts into a single pay period and taxes the combined gross once", async () => {
+    // Aug 10, 11, 13 and 18 are all within the same fortnight relative to the "2026-08-12"
+    // payCycleAnchor used by the rate() helper (confirmed via isoFortnightStart directly).
+    const shifts = ["10", "11", "13", "18"].map((day) =>
       shift({ id: `s-${day}`, startedAt: `2026-08-${day}T09:00:00`, endedAt: `2026-08-${day}T17:00:00` })
     );
     const result = await calculatePay(shifts, [rate()]);
 
     expect(result.payPeriods).toHaveLength(1);
     const [period] = result.payPeriods;
-    expect(period.weekStart).toBe("2026-08-10");
+    expect(period.periodStart).toBe("2026-08-10");
     expect(period.employer).toBe("Woolworths");
-    expect(period.grossPay).toBe(900); // 3 x 300
-    expect(period.shiftIds).toEqual(["s-10", "s-11", "s-13"]);
-    // Tax is computed once on the $900 weekly total, not summed from three per-shift taxations.
+    expect(period.grossPay).toBe(1200); // 4 x 300
+    expect(period.shiftIds).toEqual(["s-10", "s-11", "s-13", "s-18"]);
+    // Tax is computed once on the $1200 fortnightly total, not summed from four per-shift taxations.
     expect(period.taxWithheld).toBeGreaterThan(0);
     expect(period.netPay).toBe(period.grossPay - period.taxWithheld);
   });
 
-  it("keeps two employers in the same week as separate pay periods", async () => {
+  it("keeps two employers in the same fortnight as separate pay periods", async () => {
     const rateA = rate({ id: "rate-a", employer: "Woolworths" });
     const rateB = rate({ id: "rate-b", employer: "Coles" });
     const shifts = [
@@ -121,25 +124,61 @@ describe("calculatePay", () => {
     expect(result.payPeriods.map((p) => p.employer).sort()).toEqual(["Coles", "Woolworths"]);
   });
 
-  it("splits shifts in different weeks into separate pay periods", async () => {
+  it("splits shifts in different fortnights into separate pay periods", async () => {
     const shifts = [
-      shift({ id: "s1", startedAt: "2026-08-10T09:00:00", endedAt: "2026-08-10T17:00:00" }), // week of Aug 10
-      shift({ id: "s2", startedAt: "2026-08-18T09:00:00", endedAt: "2026-08-18T17:00:00" }), // week of Aug 17
+      shift({ id: "s1", startedAt: "2026-08-10T09:00:00", endedAt: "2026-08-10T17:00:00" }), // fortnight of Aug 10
+      shift({ id: "s2", startedAt: "2026-08-25T09:00:00", endedAt: "2026-08-25T17:00:00" }), // fortnight of Aug 24
     ];
 
     const result = await calculatePay(shifts, [rate()]);
 
-    expect(result.payPeriods.map((p) => p.weekStart)).toEqual(["2026-08-10", "2026-08-17"]);
+    expect(result.payPeriods.map((p) => p.periodStart)).toEqual(["2026-08-10", "2026-08-24"]);
+  });
+
+  it("uses ISO-week grouping and weeklyPaygWithholding when payFrequency is weekly", async () => {
+    // Same three shifts/gross ($900) as the fortnightly grouping test above, but weekly —
+    // proves the weekly formula is actually used (weekly(900)=106, fortnightly(900)=26, so a
+    // wrong branch here wouldn't just be off by rounding, it'd be a clearly different number).
+    const shifts = ["10", "11", "13"].map((day) =>
+      shift({ id: `s-${day}`, startedAt: `2026-08-${day}T09:00:00`, endedAt: `2026-08-${day}T17:00:00` })
+    );
+    const result = await calculatePay(shifts, [rate({ payFrequency: "weekly", payCycleAnchor: undefined })]);
+
+    expect(result.payPeriods).toHaveLength(1);
+    const [period] = result.payPeriods;
+    expect(period.periodStart).toBe("2026-08-10"); // Monday of that ISO week
+    expect(period.grossPay).toBe(900);
+    expect(period.taxWithheld).toBe(106);
+    expect(period.netPay).toBe(900 - 106);
+  });
+
+  it("keeps weekly and fortnightly periods separate for the same employer, even when their computed period start coincides", async () => {
+    // isoWeekStart("2026-08-10") and isoFortnightStart("2026-08-10", "2026-08-12") are both
+    // "2026-08-10" (confirmed directly) — without payFrequency in the grouping key, these two
+    // rate templates for the same employer would wrongly merge into one period.
+    const weeklyRate = rate({ id: "rate-weekly", payFrequency: "weekly", payCycleAnchor: undefined });
+    const fortnightlyRate = rate({ id: "rate-fortnightly", payFrequency: "fortnightly" });
+    const shifts = [
+      shift({ id: "s1", rate: "rate-weekly" }),
+      shift({ id: "s2", rate: "rate-fortnightly" }),
+    ];
+
+    const result = await calculatePay(shifts, [weeklyRate, fortnightlyRate]);
+
+    expect(result.payPeriods).toHaveLength(2);
+    expect(result.payPeriods.every((p) => p.periodStart === "2026-08-10")).toBe(true);
+    expect(result.payPeriods.map((p) => p.payFrequency).sort()).toEqual(["fortnightly", "weekly"]);
   });
 
   it("totals equal the sum of per-period figures", async () => {
     const shifts = [
-      shift({ id: "s1", startedAt: "2026-08-10T09:00:00", endedAt: "2026-08-10T17:00:00" }),
-      shift({ id: "s2", startedAt: "2026-08-18T09:00:00", endedAt: "2026-08-18T17:00:00" }),
+      shift({ id: "s1", startedAt: "2026-08-10T09:00:00", endedAt: "2026-08-10T17:00:00" }), // fortnight of Aug 10
+      shift({ id: "s2", startedAt: "2026-08-25T09:00:00", endedAt: "2026-08-25T17:00:00" }), // fortnight of Aug 24
     ];
 
     const result = await calculatePay(shifts, [rate()]);
 
+    expect(result.payPeriods).toHaveLength(2); // confirms this is actually summing across periods
     const sumGross = result.payPeriods.reduce((sum, p) => sum + p.grossPay, 0);
     const sumTax = result.payPeriods.reduce((sum, p) => sum + p.taxWithheld, 0);
     expect(result.totalGrossPay).toBe(sumGross);

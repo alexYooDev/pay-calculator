@@ -57,6 +57,8 @@ function newRateTemplateDraft(): Omit<RateTemplate, "id"> {
     employmentType: "casual",
     region: "AU-QLD",
     loading: [{ ...emptyLoading }],
+    payFrequency: "weekly",
+    payCycleAnchor: "",
   };
 }
 
@@ -127,7 +129,8 @@ export default function Home() {
   }, [shifts, loaded]);
 
   function addRateTemplate() {
-    if (!rateDraft.employer || rateDraft.baseRate <= 0) return;
+    const anchorMissing = rateDraft.payFrequency === "fortnightly" && !rateDraft.payCycleAnchor;
+    if (!rateDraft.employer || rateDraft.baseRate <= 0 || anchorMissing) return;
     const rate: RateTemplate = { ...rateDraft, id: crypto.randomUUID() };
     setRateTemplates((prev) => [...prev, rate]);
     setRateDraft(newRateTemplateDraft());
@@ -191,7 +194,8 @@ export default function Home() {
     return r ? `${r.employer} — $${r.baseRate}/hr (${r.region})` : "Unknown rate";
   };
 
-  const periodLabel = (p: PayPeriod) => `Week of ${p.weekStart} · ${p.employer}`;
+  const periodLabel = (p: PayPeriod) =>
+    `${p.payFrequency === "fortnightly" ? "Fortnight" : "Week"} of ${p.periodStart} · ${p.employer}`;
 
   return (
     <div className="min-h-screen bg-paper text-ink">
@@ -208,9 +212,10 @@ export default function Home() {
           <p className="font-display uppercase tracking-wide text-xs text-deduction">Before you rely on this</p>
           <p className="text-sm text-ink-soft">
             This is an independent, unofficial tool — not affiliated with your employer, Fair Work, or the
-            ATO. Public holidays are only checked for the region you select, and tax withholding always
-            assumes an Australian resident claiming the tax-free threshold with no HELP/STSL debt. Treat
-            results as an estimate and check them against your actual payslip.
+            ATO. Public holidays are checked at the state/territory level only — council-specific
+            holidays (e.g. Brisbane&apos;s Ekka Day) aren&apos;t in that data and won&apos;t be picked up. Tax
+            withholding always assumes an Australian resident claiming the tax-free threshold with no
+            HELP/STSL debt. Treat results as an estimate and check them against your actual payslip.
           </p>
         </div>
 
@@ -268,6 +273,28 @@ export default function Home() {
                   <option value="permanent">Permanent</option>
                 </select>
               </Field>
+              <Field label="Pay frequency">
+                <select
+                  className="input"
+                  value={rateDraft.payFrequency}
+                  onChange={(e) =>
+                    setRateDraft((p) => ({ ...p, payFrequency: e.target.value as RateTemplate["payFrequency"] }))
+                  }
+                >
+                  <option value="weekly">Weekly</option>
+                  <option value="fortnightly">Fortnightly</option>
+                </select>
+              </Field>
+              {rateDraft.payFrequency === "fortnightly" && (
+                <Field label="Pay cycle start date">
+                  <input
+                    className="input"
+                    type="date"
+                    value={rateDraft.payCycleAnchor}
+                    onChange={(e) => setRateDraft((p) => ({ ...p, payCycleAnchor: e.target.value }))}
+                  />
+                </Field>
+              )}
             </div>
 
             <div className="flex flex-col gap-2">
@@ -314,7 +341,11 @@ export default function Home() {
             <button
               className="btn-stamp w-fit"
               onClick={addRateTemplate}
-              disabled={!rateDraft.employer || rateDraft.baseRate <= 0}
+              disabled={
+                !rateDraft.employer ||
+                rateDraft.baseRate <= 0 ||
+                (rateDraft.payFrequency === "fortnightly" && !rateDraft.payCycleAnchor)
+              }
             >
               Add rate template
             </button>
@@ -479,15 +510,15 @@ export default function Home() {
               <div>
                 <p className="eyebrow mb-1">Pay periods</p>
                 <p className="text-xs text-ink-soft mb-2">
-                  Weekly, per employer. PAYG withholding assumes an Australian resident claiming the tax-free
-                  threshold, with no HELP/STSL debt.
+                  Weekly or fortnightly per rate template, grouped per employer. PAYG withholding assumes
+                  an Australian resident claiming the tax-free threshold, with no HELP/STSL debt.
                 </p>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm border-collapse font-mono">
                     <thead>
                       <tr className="text-left border-b border-ink">
                         <th className="py-2 font-body text-xs uppercase tracking-wide text-ink-soft font-normal">
-                          Week starting
+                          Period starting
                         </th>
                         <th className="font-body text-xs uppercase tracking-wide text-ink-soft font-normal">
                           Employer
@@ -503,8 +534,8 @@ export default function Home() {
                     </thead>
                     <tbody>
                       {result.payPeriods.map((p) => (
-                        <tr key={`${p.weekStart}|${p.employer}`} className="border-b border-rule">
-                          <td className="py-2 whitespace-nowrap">{p.weekStart}</td>
+                        <tr key={`${p.periodStart}|${p.employer}|${p.payFrequency}`} className="border-b border-rule">
+                          <td className="py-2 whitespace-nowrap">{p.periodStart}</td>
                           <td className="font-body whitespace-nowrap">{p.employer}</td>
                           <td className="whitespace-nowrap">${p.grossPay.toFixed(2)}</td>
                           <td className="text-deduction whitespace-nowrap">-${p.taxWithheld.toFixed(2)}</td>
@@ -519,9 +550,9 @@ export default function Home() {
               <div className="flex flex-col gap-6">
                 {result.payPeriods.map((p) => (
                   <PayslipStub
-                    key={`${p.weekStart}|${p.employer}`}
+                    key={`${p.periodStart}|${p.employer}|${p.payFrequency}`}
                     title={periodLabel(p)}
-                    subtitle="Weekly PAYG withholding, Scale 2"
+                    subtitle={`${p.payFrequency === "fortnightly" ? "Fortnightly" : "Weekly"} PAYG withholding, Scale 2`}
                     grossPay={p.grossPay}
                     taxWithheld={p.taxWithheld}
                     netPay={p.netPay}

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { weeklyPaygWithholding } from "./tax";
+import { fortnightlyPaygWithholding, weeklyPaygWithholding } from "./tax";
 
 describe("weeklyPaygWithholding", () => {
   it("matches the ATO's own published Scale 2 weekly sample data", () => {
@@ -31,5 +31,24 @@ describe("weeklyPaygWithholding", () => {
     expect(weeklyPaygWithholding(3652)).toBe(1061);
     expect(weeklyPaygWithholding(3653)).toBe(1062);
     expect(weeklyPaygWithholding(4000)).toBe(1225);
+  });
+});
+
+describe("fortnightlyPaygWithholding", () => {
+  it("matches double the weekly-equivalent withholding, per the ATO's conversion method", () => {
+    // $1,076 fortnightly = $538 weekly-equivalent, which is one of the ATO-cross-checked
+    // weekly values above ($538 -> $27), so this should be exactly double that.
+    expect(fortnightlyPaygWithholding(1076)).toBe(54);
+  });
+
+  it("withholds nothing at or below zero", () => {
+    expect(fortnightlyPaygWithholding(0)).toBe(0);
+    expect(fortnightlyPaygWithholding(-100)).toBe(0);
+  });
+
+  it("is consistent with weeklyPaygWithholding for arbitrary amounts", () => {
+    for (const grossFortnightly of [1000, 1077, 2000, 2564]) {
+      expect(fortnightlyPaygWithholding(grossFortnightly)).toBe(weeklyPaygWithholding(grossFortnightly / 2) * 2);
+    }
   });
 });

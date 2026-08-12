@@ -1,6 +1,6 @@
-import { dayOfWeek, isoWeekStart } from "./date-utils";
+import { dayOfWeek, isoFortnightStart, isoWeekStart } from "./date-utils";
 import { isPublicHoliday } from "./holidays";
-import { weeklyPaygWithholding } from "./tax";
+import { fortnightlyPaygWithholding, weeklyPaygWithholding } from "./tax";
 import type { RateTemplate, ShiftEntry } from "./types";
 
 /** Canonical calendar-derived loading categories a shift can match against RateTemplate.loading[].type. */
@@ -59,8 +59,9 @@ export async function calculateShiftPay(shift: ShiftEntry, rate: RateTemplate): 
 }
 
 export interface PayPeriod {
-  weekStart: string; // "YYYY-MM-DD" (Monday)
+  periodStart: string; // "YYYY-MM-DD" (Monday) — start of the weekly or fortnightly pay cycle
   employer: string;
+  payFrequency: RateTemplate["payFrequency"];
   grossPay: number;
   taxWithheld: number;
   netPay: number;
@@ -76,9 +77,11 @@ export interface PayResult {
 }
 
 /**
- * PAYG withholding is calculated per pay period (here: per ISO week), not per shift, and each
- * employer withholds independently based only on what they pay — so periods are grouped by
- * (week, employer), not just week.
+ * PAYG withholding is calculated per pay period, not per shift, and each employer withholds
+ * independently based only on what they pay — so periods are grouped by (period start,
+ * employer, pay frequency). Frequency is part of the key, not just a detail read off the
+ * period, so that a weekly and a fortnightly period for the same employer can never collide
+ * even if their computed start dates happen to coincide.
  */
 export async function calculatePay(shifts: ShiftEntry[], rateTemplates: RateTemplate[]): Promise<PayResult> {
   const ratesById = new Map(rateTemplates.map((r) => [r.id, r]));
@@ -96,12 +99,15 @@ export async function calculatePay(shifts: ShiftEntry[], rateTemplates: RateTemp
   for (const shift of shifts) {
     const rate = ratesById.get(shift.rate)!;
     const breakdown = breakdownsByShiftId.get(shift.id)!;
-    const weekStart = isoWeekStart(shift.startedAt.slice(0, 10));
-    const key = `${weekStart}|${rate.employer}`;
+    const date = shift.startedAt.slice(0, 10);
+    const periodStart =
+      rate.payFrequency === "fortnightly" ? isoFortnightStart(date, rate.payCycleAnchor!) : isoWeekStart(date);
+    const key = `${periodStart}|${rate.employer}|${rate.payFrequency}`;
 
     const period = periodsByKey.get(key) ?? {
-      weekStart,
+      periodStart,
       employer: rate.employer,
+      payFrequency: rate.payFrequency,
       grossPay: 0,
       taxWithheld: 0,
       netPay: 0,
@@ -114,10 +120,13 @@ export async function calculatePay(shifts: ShiftEntry[], rateTemplates: RateTemp
 
   const payPeriods = Array.from(periodsByKey.values())
     .map((period) => {
-      const taxWithheld = weeklyPaygWithholding(period.grossPay);
+      const taxWithheld =
+        period.payFrequency === "fortnightly"
+          ? fortnightlyPaygWithholding(period.grossPay)
+          : weeklyPaygWithholding(period.grossPay);
       return { ...period, taxWithheld, netPay: period.grossPay - taxWithheld };
     })
-    .sort((a, b) => a.weekStart.localeCompare(b.weekStart) || a.employer.localeCompare(b.employer));
+    .sort((a, b) => a.periodStart.localeCompare(b.periodStart) || a.employer.localeCompare(b.employer));
 
   const totalGrossPay = breakdowns.reduce((sum, b) => sum + b.totalPay, 0);
   const totalTaxWithheld = payPeriods.reduce((sum, p) => sum + p.taxWithheld, 0);

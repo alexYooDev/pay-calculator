@@ -13,6 +13,8 @@ export interface RateTemplate {
   employmentType: EmploymentType;
   loading: Loading[];
   region: string; // e.g. "AU-QLD"
+  payFrequency: "weekly" | "fortnightly";
+  payCycleAnchor?: string; // required only when payFrequency is "fortnightly"
 }
 
 export interface ShiftEntry {

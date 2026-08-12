@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { addDays, dayOfWeek, isoWeekStart } from "./date-utils";
+import { addDays, dayOfWeek, isoFortnightStart, isoWeekStart } from "./date-utils";
 
 describe("dayOfWeek", () => {
   it("identifies each day of a known week correctly", () => {
@@ -59,5 +59,38 @@ describe("isoWeekStart", () => {
   it("rolls over into the previous month/year when the week start crosses a boundary", () => {
     // 2027-01-01 is a Friday; its week starts Monday 2026-12-28.
     expect(isoWeekStart("2027-01-01")).toBe("2026-12-28");
+  });
+});
+
+describe("isoFortnightStart", () => {
+  // Anchor "2026-08-12" (a Wednesday) snaps to Monday 2026-08-10, so fortnight 0 covers
+  // 2026-08-10 .. 2026-08-23 and fortnight 1 starts 2026-08-24.
+  const anchor = "2026-08-12";
+
+  it("groups every date in the anchor's own fortnight to the same start", () => {
+    expect(isoFortnightStart("2026-08-10", anchor)).toBe("2026-08-10"); // week 0, Monday
+    expect(isoFortnightStart("2026-08-16", anchor)).toBe("2026-08-10"); // week 0, Sunday
+    expect(isoFortnightStart("2026-08-17", anchor)).toBe("2026-08-10"); // week 1, Monday
+    expect(isoFortnightStart("2026-08-23", anchor)).toBe("2026-08-10"); // week 1, Sunday
+  });
+
+  it("moves to the next fortnight start at the 14-day boundary", () => {
+    expect(isoFortnightStart("2026-08-24", anchor)).toBe("2026-08-24");
+  });
+
+  it("handles dates before the anchor", () => {
+    expect(isoFortnightStart("2026-08-05", anchor)).toBe("2026-07-27");
+    expect(isoFortnightStart("2026-08-09", anchor)).toBe("2026-07-27");
+  });
+
+  it("gives the same result regardless of which day of the week the anchor itself falls on", () => {
+    // Both a Monday anchor and a Thursday anchor represent "the same fortnight cycle" once
+    // snapped to their own Monday, so results shouldn't depend on the anchor's weekday.
+    expect(isoFortnightStart("2026-08-24", "2026-08-10")).toBe("2026-08-24");
+    expect(isoFortnightStart("2026-08-24", "2026-08-13")).toBe("2026-08-24");
+  });
+
+  it("rolls over a year boundary", () => {
+    expect(isoFortnightStart("2027-01-01", anchor)).toBe("2026-12-28");
   });
 });
